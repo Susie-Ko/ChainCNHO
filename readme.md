@@ -3,9 +3,9 @@
 
 ## Option ONE-Get started by download the executable binary program!
 ### Download the Binary cnho_stables
-[Centos7+](https://cnho.io/resource/ChainCNHO/cnho_stables1.0.0.bin)
-[Windons10/11](https://cnho.io/resource/ChainCNHO/cnho_stables1.0.0.exe)
-[Mac OS X](https://cnho.io/resource/ChainCNHO/cnho_stables_mac1.0.0.bin)
+[Centos7+](https://github.com/alashooinc/CNHO-Stables/raw/refs/heads/main/cnho_stables.bin)
+[Windons10/11](https://github.com/alashooinc/CNHO-Stables/raw/refs/heads/main/cnho_stables.exe)
+[Mac OS X](https://github.com/alashooinc/CNHO-Stables/raw/refs/heads/main/cnho_stables)
 
 * [Centos 7+](https://pan.baidu.com/s/1X26In0sNUbBG1amppijAHw?pwd=jb22)
 * [Windows 10/11](https://pan.baidu.com/s/1DMWUEgYCqGzsh8-kab3Xrg?pwd=7xcq)
