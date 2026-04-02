@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	appparams "github.com/osmosis-labs/osmosis/v9/app/params"
-	"github.com/osmosis-labs/osmosis/v9/x/tokenfactory/types"
+	appparams "cnho/app/params"
+	"cnho/x/tokenfactory/types"
 )
 
 func TestDecomposeDenoms(t *testing.T) {
