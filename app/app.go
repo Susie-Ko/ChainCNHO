@@ -106,6 +106,14 @@ import (
 	cnhomodule "cnho/x/cnho"
 	cnhomodulekeeper "cnho/x/cnho/keeper"
 	cnhomoduletypes "cnho/x/cnho/types"
+
+	tokenfactory "cnho/x/tokenfactory"
+	tokenfactorykeeper "cnho/x/tokenfactory/keeper"
+	tokenfactorytypes "cnho/x/tokenfactory/types"
+
+	wasm "github.com/CosmWasm/wasmd/x/wasm"
+	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
+	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 
 	appparams "cnho/app/params"
@@ -115,6 +123,7 @@ import (
 const (
 	AccountAddressPrefix = "cnho"
 	Name                 = "cnho"
+	UpgradeName          = "v2"
 )
 
 // this line is used by starport scaffolding # stargate/wasm/app/enabledProposals
@@ -165,6 +174,8 @@ var (
 		ica.AppModuleBasic{},
 		vesting.AppModuleBasic{},
 		cnhomodule.AppModuleBasic{},
+		tokenfactory.AppModuleBasic{},
+		wasm.AppModuleBasic{},
 		// this line is used by starport scaffolding # stargate/app/moduleBasic
 	)
 
@@ -178,6 +189,7 @@ var (
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
+		tokenfactorytypes.ModuleName:   {authtypes.Minter, authtypes.Burner},
 		// this line is used by starport scaffolding # stargate/app/maccPerms
 	}
 )
@@ -232,13 +244,15 @@ type App struct {
 	ICAHostKeeper    icahostkeeper.Keeper
 	FeeGrantKeeper   feegrantkeeper.Keeper
 	GroupKeeper      groupkeeper.Keeper
+	WasmKeeper       wasmkeeper.Keeper
 
 	// make scoped keepers public for test purposes
 	ScopedIBCKeeper      capabilitykeeper.ScopedKeeper
 	ScopedTransferKeeper capabilitykeeper.ScopedKeeper
 	ScopedICAHostKeeper  capabilitykeeper.ScopedKeeper
 
-	CnhoKeeper cnhomodulekeeper.Keeper
+	CnhoKeeper         cnhomodulekeeper.Keeper
+	TokenFactoryKeeper tokenfactorykeeper.Keeper
 	// this line is used by starport scaffolding # stargate/app/keeperDeclaration
 
 	// mm is the module manager
@@ -284,6 +298,8 @@ func New(
 		ibctransfertypes.StoreKey, icahosttypes.StoreKey, capabilitytypes.StoreKey, group.StoreKey,
 		icacontrollertypes.StoreKey,
 		cnhomoduletypes.StoreKey,
+		tokenfactorytypes.StoreKey,
+		wasmtypes.StoreKey,
 		// this line is used by starport scaffolding # stargate/app/storeKey
 	)
 	tkeys := sdk.NewTransientStoreKeys(paramstypes.TStoreKey)
@@ -377,6 +393,15 @@ func New(
 		authtypes.FeeCollectorName,
 	)
 
+	app.TokenFactoryKeeper = tokenfactorykeeper.NewKeeper(
+		appCodec,
+		keys[tokenfactorytypes.StoreKey],
+		app.GetSubspace(tokenfactorytypes.ModuleName),
+		app.AccountKeeper,
+		app.BankKeeper,
+		app.DistrKeeper,
+	)
+
 	app.SlashingKeeper = slashingkeeper.NewKeeper(
 		appCodec,
 		keys[slashingtypes.StoreKey],
@@ -445,6 +470,30 @@ func New(
 	transferModule := transfer.NewAppModule(app.TransferKeeper)
 	transferIBCModule := transfer.NewIBCModule(app.TransferKeeper)
 
+	wasmDir := filepath.Join(homePath, "wasm")
+
+	scopedWasmKeeper := app.CapabilityKeeper.ScopeToModule(wasmtypes.ModuleName)
+
+	app.WasmKeeper = wasmkeeper.NewKeeper(
+		appCodec,
+		keys[wasmtypes.StoreKey],
+		app.GetSubspace(wasmtypes.ModuleName),
+		app.AccountKeeper,
+		app.BankKeeper,
+		app.StakingKeeper,
+		app.DistrKeeper,
+		app.IBCKeeper.ChannelKeeper,
+		&app.IBCKeeper.PortKeeper,
+		scopedWasmKeeper,
+		app.TransferKeeper,
+		app.MsgServiceRouter(),
+		app.GRPCQueryRouter(),
+		wasmDir,
+		wasmtypes.DefaultWasmConfig(),
+		"iterator,staking,stargate,cosmwasm_1_1,cosmwasm_1_2",
+		//"",
+	)
+
 	app.ICAHostKeeper = icahostkeeper.NewKeeper(
 		appCodec, keys[icahosttypes.StoreKey],
 		app.GetSubspace(icahosttypes.SubModuleName),
@@ -503,6 +552,13 @@ func New(
 	)
 	cnhoModule := cnhomodule.NewAppModule(appCodec, app.CnhoKeeper, app.AccountKeeper, app.BankKeeper)
 
+	tokenfactoryModule := tokenfactory.NewAppModule(
+		appCodec,
+		app.TokenFactoryKeeper,
+		app.AccountKeeper,
+		app.BankKeeper,
+	)
+
 	// this line is used by starport scaffolding # stargate/app/keeperDefinition
 
 	/**** IBC Routing ****/
@@ -511,9 +567,15 @@ func New(
 	app.CapabilityKeeper.Seal()
 
 	// Create static IBC router, add transfer route, then set and seal it
+	wasmIBCHandler := wasm.NewIBCHandler(
+		app.WasmKeeper,
+		app.IBCKeeper.ChannelKeeper,
+		app.IBCKeeper.ChannelKeeper,
+	)
 	ibcRouter := ibcporttypes.NewRouter()
 	ibcRouter.AddRoute(icahosttypes.SubModuleName, icaHostIBCModule).
-		AddRoute(ibctransfertypes.ModuleName, transferIBCModule)
+		AddRoute(ibctransfertypes.ModuleName, transferIBCModule).
+		AddRoute(wasmtypes.ModuleName, wasmIBCHandler)
 	// this line is used by starport scaffolding # ibc/app/router
 	app.IBCKeeper.SetRouter(ibcRouter)
 
@@ -566,9 +628,11 @@ func New(
 		evidence.NewAppModule(app.EvidenceKeeper),
 		ibc.NewAppModule(app.IBCKeeper),
 		params.NewAppModule(app.ParamsKeeper),
+		wasm.NewAppModule(appCodec, &app.WasmKeeper, app.StakingKeeper, app.AccountKeeper, app.BankKeeper),
 		transferModule,
 		icaModule,
 		cnhoModule,
+		tokenfactoryModule,
 		// this line is used by starport scaffolding # stargate/app/appModule
 	)
 
@@ -599,6 +663,8 @@ func New(
 		paramstypes.ModuleName,
 		vestingtypes.ModuleName,
 		cnhomoduletypes.ModuleName,
+		tokenfactorytypes.ModuleName,
+		wasmtypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/beginBlockers
 	)
 
@@ -624,6 +690,8 @@ func New(
 		upgradetypes.ModuleName,
 		vestingtypes.ModuleName,
 		cnhomoduletypes.ModuleName,
+		tokenfactorytypes.ModuleName,
+		wasmtypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/endBlockers
 	)
 
@@ -654,6 +722,8 @@ func New(
 		upgradetypes.ModuleName,
 		vestingtypes.ModuleName,
 		cnhomoduletypes.ModuleName,
+		tokenfactorytypes.ModuleName,
+		wasmtypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/initGenesis
 	)
 
@@ -687,6 +757,54 @@ func New(
 		// this line is used by starport scaffolding # stargate/app/appModule
 	)
 	app.sm.RegisterStoreDecoders()
+
+	// ===================== UPGRADE: v2 =====================
+
+	upgradeInfo, err := app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
+	if err != nil {
+		panic(fmt.Sprintf("failed to read upgrade info: %v", err))
+	}
+
+	if upgradeInfo.Name == UpgradeName && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+		storeUpgrades := storetypes.StoreUpgrades{
+			Added: []string{
+				wasmtypes.StoreKey,
+				tokenfactorytypes.StoreKey,
+			},
+		}
+
+		app.SetStoreLoader(
+			upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades),
+		)
+	}
+
+	// Upgrade Handler
+	app.UpgradeKeeper.SetUpgradeHandler(UpgradeName, func(
+		ctx sdk.Context,
+		plan upgradetypes.Plan,
+		vm module.VersionMap,
+	) (module.VersionMap, error) {
+
+		ctx.Logger().Info("🚀 RUNNING UPGRADE " + UpgradeName)
+
+		// 1️⃣ 跑 migrations（核心）
+		newVM, err := app.mm.RunMigrations(ctx, app.configurator, vm)
+		if err != nil {
+			return vm, err
+		}
+
+		// 2️⃣ TokenFactory params（建议保留）
+		app.TokenFactoryKeeper.SetParams(ctx, tokenfactorytypes.DefaultParams())
+
+		// 3️⃣ Wasm params（建议保留）
+		app.WasmKeeper.SetParams(ctx, wasmtypes.DefaultParams())
+
+		ctx.Logger().Info("✅ UPGRADE " + UpgradeName + " SUCCESS")
+
+		return newVM, nil
+	})
+
+	// ===================== END UPGRADE =====================
 
 	// initialize stores
 	app.MountKVStores(keys)
@@ -889,6 +1007,8 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(icacontrollertypes.SubModuleName)
 	paramsKeeper.Subspace(icahosttypes.SubModuleName)
 	paramsKeeper.Subspace(cnhomoduletypes.ModuleName)
+	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
+	paramsKeeper.Subspace(wasmtypes.ModuleName).WithKeyTable(wasmtypes.ParamKeyTable())
 	// this line is used by starport scaffolding # stargate/app/paramSubspace
 
 	return paramsKeeper
