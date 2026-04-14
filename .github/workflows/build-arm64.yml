@@ -1,0 +1,33 @@
+name: Build macOS arm64
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build arm64
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=arm64
+          export CC="clang -target arm64-apple-macos11"
+          export CXX="clang++ -target arm64-apple-macos11"
+
+          go build -o cnhod_arm64 ./cmd/cnhod
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnhod-arm64
+          path: cnhod_arm64
