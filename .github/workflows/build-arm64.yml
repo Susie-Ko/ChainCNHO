@@ -10,30 +10,26 @@ jobs:
   # =========================
   # Linux (CentOS7 Compatible)
   # =========================
-  build-linux:
-    runs-on: ubuntu-latest
+build-linux:
+  runs-on: ubuntu-latest
 
-    container:
-      image: centos:7
+  steps:
+    - uses: actions/checkout@v4
 
-    steps:
-      - uses: actions/checkout@v4
+    - name: Build CentOS7 Compatible Binary
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          centos:7 \
+          bash -c '
 
-      - name: Install Dependencies
-        run: |
           yum install -y wget git gcc gcc-c++ make tar gzip
 
           wget https://go.dev/dl/go1.21.9.linux-amd64.tar.gz
+
           tar -C /usr/local -xzf go1.21.9.linux-amd64.tar.gz
 
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
-
-      - name: Verify Go
-        run: |
-          /usr/local/go/bin/go version
-
-      - name: Build Linux
-        run: |
           export PATH=/usr/local/go/bin:$PATH
 
           export CGO_ENABLED=1
@@ -41,12 +37,13 @@ jobs:
           export GOARCH=amd64
 
           go build -o cnhod-linux-amd64 ./cmd/cnhod
+          '
 
-      - name: Upload Linux binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: cnhod-linux-amd64
-          path: cnhod-linux-amd64
+    - name: Upload Linux Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: cnhod-linux-amd64
+        path: cnhod-linux-amd64
 
 
   # =========================
@@ -119,26 +116,50 @@ jobs:
   # Windows 11
   # =========================
   build-windows:
-    runs-on: windows-latest
+   runs-on: windows-latest
 
-    steps:
-      - uses: actions/checkout@v4
+  steps:
+    - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.21.9'
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.21.9'
 
-      - name: Build Windows
-        shell: bash
-        run: |
-          export CGO_ENABLED=1
-          export GOOS=windows
-          export GOARCH=amd64
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-make
+          unzip
+          curl
 
-          go build -o cnhod-windows-amd64.exe ./cmd/cnhod
+    - name: Download wasmvm
+      shell: msys2 {0}
+      run: |
+        curl -L https://github.com/CosmWasm/wasmvm/releases/download/v1.1.1/wasmvm_windows_x86_64.zip -o wasmvm.zip
 
-      - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: cnhod-windows-amd64
-          path: cnhod-windows-amd64.exe
+        unzip wasmvm.zip
+
+        ls
+
+    - name: Build Windows
+      shell: msys2 {0}
+      run: |
+        export CGO_ENABLED=1
+        export GOOS=windows
+        export GOARCH=amd64
+
+        export CGO_LDFLAGS="-L$(pwd)"
+
+        go build -o cnhod-windows-amd64.exe ./cmd/cnhod
+
+    - name: Upload Windows Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: cnhod-windows-amd64
+        path: |
+          cnhod-windows-amd64.exe
+          wasmvm.dll
