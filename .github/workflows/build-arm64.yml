@@ -24,6 +24,10 @@ jobs:
             centos:7 \
             bash -c '
 
+            sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/CentOS-*.repo
+            sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/CentOS-*.repo
+            sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/CentOS-*.repo
+
             yum install -y wget git gcc gcc-c++ make tar gzip
 
             wget https://go.dev/dl/go1.21.9.linux-amd64.tar.gz
@@ -43,13 +47,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cnhod-linux-amd64
-          path: cnhod-linux-amd64
+          path: |
+            cnhod-linux-amd64
+            libwasmvm.x86_64.so
 
   # =========================
   # macOS Intel (10.15)
   # =========================
   build-macos-amd64:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v4
@@ -71,11 +77,13 @@ jobs:
 
           go build -o cnhod-darwin-amd64 ./cmd/cnhod
 
-      - name: Upload macOS Intel binary
+      - name: Upload macOS Intel Binary
         uses: actions/upload-artifact@v4
         with:
           name: cnhod-darwin-amd64
-          path: cnhod-darwin-amd64
+          path: |
+            cnhod-darwin-amd64
+            libwasmvm.dylib
 
   # =========================
   # macOS Apple Silicon
@@ -103,14 +111,16 @@ jobs:
 
           go build -o cnhod-darwin-arm64 ./cmd/cnhod
 
-      - name: Upload macOS ARM64 binary
+      - name: Upload macOS ARM64 Binary
         uses: actions/upload-artifact@v4
         with:
           name: cnhod-darwin-arm64
-          path: cnhod-darwin-arm64
+          path: |
+            cnhod-darwin-arm64
+            libwasmvm.dylib
 
   # =========================
-  # Windows 11
+  # Windows
   # =========================
   build-windows:
     runs-on: windows-latest
@@ -129,16 +139,18 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-make
-            unzip
-            curl
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-tools-git
 
-      - name: Download wasmvm
+      - name: Generate libwasmvm.a
         shell: msys2 {0}
         run: |
-          curl -L https://github.com/CosmWasm/wasmvm/releases/download/v1.1.1/wasmvm_windows_x86_64.zip -o wasmvm.zip
+          gendef wasmvm.dll
 
-          unzip wasmvm.zip
+          dlltool \
+            --dllname wasmvm.dll \
+            --def wasmvm.def \
+            --output-lib libwasmvm.a
 
           ls
 
