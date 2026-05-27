@@ -142,9 +142,16 @@ jobs:
             mingw-w64-x86_64-binutils
             mingw-w64-x86_64-tools-git
 
+      - name: Verify wasmvm.dll
+        shell: msys2 {0}
+        run: |
+          ls
+
       - name: Generate libwasmvm.a
         shell: msys2 {0}
         run: |
+          export PATH="/mingw64/bin:$PATH"
+
           gendef wasmvm.dll
 
           dlltool \
@@ -157,6 +164,10 @@ jobs:
       - name: Build Windows
         shell: msys2 {0}
         run: |
+          export PATH="/c/hostedtoolcache/windows/go/1.21.9/x64/bin:$PATH"
+
+          go version
+
           export CGO_ENABLED=1
           export GOOS=windows
           export GOARCH=amd64
