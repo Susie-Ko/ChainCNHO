@@ -1,4 +1,4 @@
-name: Build macOS arm64
+name: Build Multi Platform (Production)
 
 on:
   push:
@@ -6,7 +6,53 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-arm64:
+
+  # =========================
+  # Linux (CentOS7 Compatible)
+  # =========================
+  build-linux:
+    runs-on: ubuntu-latest
+
+    container:
+      image: centos:7
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          yum install -y wget git gcc gcc-c++ make tar gzip
+
+          wget https://go.dev/dl/go1.21.9.linux-amd64.tar.gz
+          tar -C /usr/local -xzf go1.21.9.linux-amd64.tar.gz
+
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Verify Go
+        run: |
+          /usr/local/go/bin/go version
+
+      - name: Build Linux
+        run: |
+          export PATH=/usr/local/go/bin:$PATH
+
+          export CGO_ENABLED=1
+          export GOOS=linux
+          export GOARCH=amd64
+
+          go build -o cnhod-linux-amd64 ./cmd/cnhod
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnhod-linux-amd64
+          path: cnhod-linux-amd64
+
+
+  # =========================
+  # macOS Intel (10.15)
+  # =========================
+  build-macos-amd64:
     runs-on: macos-latest
 
     steps:
@@ -14,20 +60,85 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.21.9'
 
-      - name: Build arm64
+      - name: Build macOS Intel
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=amd64
+
+          export MACOSX_DEPLOYMENT_TARGET=10.15
+
+          export CC="clang -target x86_64-apple-macos10.15"
+          export CXX="clang++ -target x86_64-apple-macos10.15"
+
+          go build -o cnhod-darwin-amd64 ./cmd/cnhod
+
+      - name: Upload macOS Intel binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnhod-darwin-amd64
+          path: cnhod-darwin-amd64
+
+
+  # =========================
+  # macOS Apple Silicon
+  # =========================
+  build-macos-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.9'
+
+      - name: Build macOS ARM64
         run: |
           export CGO_ENABLED=1
           export GOOS=darwin
           export GOARCH=arm64
+
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+
           export CC="clang -target arm64-apple-macos11"
           export CXX="clang++ -target arm64-apple-macos11"
 
-          go build -o cnhod_arm64 ./cmd/cnhod
+          go build -o cnhod-darwin-arm64 ./cmd/cnhod
 
-      - name: Upload
+      - name: Upload macOS ARM64 binary
         uses: actions/upload-artifact@v4
         with:
-          name: cnhod-arm64
-          path: cnhod_arm64
+          name: cnhod-darwin-arm64
+          path: cnhod-darwin-arm64
+
+
+  # =========================
+  # Windows 11
+  # =========================
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.9'
+
+      - name: Build Windows
+        shell: bash
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+
+          go build -o cnhod-windows-amd64.exe ./cmd/cnhod
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnhod-windows-amd64
+          path: cnhod-windows-amd64.exe

@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -12,7 +13,11 @@ import (
 // ConvertToBaseToken converts a fee amount in a whitelisted fee token to the base fee token amount
 func (k Keeper) CreateDenom(ctx sdk.Context, creatorAddr string, subdenom string) (newTokenDenom string, err error) {
 	// Temporary check until IBC bug is sorted out
-	if k.bankKeeper.HasSupply(ctx, subdenom) {
+
+	baseSubdenom := strings.ToLower(subdenom)
+	symbolDenom := strings.ToUpper(subdenom)
+
+	if k.bankKeeper.HasSupply(ctx, baseSubdenom) {
 		return "", fmt.Errorf("Temporary error until IBC bug is sorted out, " +
 			"can't create subdenoms that are the same as a native denom.")
 	}
@@ -29,7 +34,7 @@ func (k Keeper) CreateDenom(ctx sdk.Context, creatorAddr string, subdenom string
 		}
 	}
 
-	denom, err := types.GetTokenDenom(creatorAddr, subdenom)
+	denom, err := types.GetTokenDenom(creatorAddr, baseSubdenom)
 	if err != nil {
 		return "", err
 	}
@@ -40,11 +45,29 @@ func (k Keeper) CreateDenom(ctx sdk.Context, creatorAddr string, subdenom string
 	}
 
 	denomMetaData := banktypes.Metadata{
-		DenomUnits: []*banktypes.DenomUnit{{
-			Denom:    denom,
-			Exponent: 0,
-		}},
-		Base: denom,
+		Description: fmt.Sprintf("%s Stable is a tokenized Real World Asset (RWA) backed by underlying off-chain assets. Assets labeled 'Stable' are pegged to fiat currencies, 'Stock' represents tokenized equity instruments, 'Bond' represents tokenized fixed-income securities, while other asset categories may represent commodities, real estate, ETFs, treasury products, and other real-world financial assets.", symbolDenom),
+
+		Base:    denom,
+		Display: baseSubdenom,
+
+		Name:   fmt.Sprintf("%s Stable", symbolDenom),
+		Symbol: symbolDenom,
+
+		DenomUnits: []*banktypes.DenomUnit{
+			{
+				Denom:    denom,
+				Exponent: 0,
+			},
+			{
+				Denom:    baseSubdenom,
+				Exponent: 6,
+			},
+		},
+	}
+
+	err = denomMetaData.Validate()
+	if err != nil {
+		return "", err
 	}
 
 	k.bankKeeper.SetDenomMetaData(ctx, denomMetaData)

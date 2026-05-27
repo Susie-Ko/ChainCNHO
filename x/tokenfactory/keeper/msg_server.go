@@ -28,7 +28,7 @@ func (server msgServer) CreateDenom(goCtx context.Context, msg *types.MsgCreateD
 	senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
 
 	if !senderAddr.Equals(adminAddr) {
-		return nil, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, "only Whitelist can create for the present state of CNHO Stables")
+		return nil, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, "only WHITELIST can create for the present state of CNHO Stables")
 	}
 
 	denom, err := server.Keeper.CreateDenom(ctx, msg.Sender, msg.Subdenom)
