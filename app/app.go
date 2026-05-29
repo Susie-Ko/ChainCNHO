@@ -2,6 +2,7 @@ package app
 
 import (
 	v2 "cnho/app/upgrades/v2"
+	v3 "cnho/app/upgrades/v3"
 	"fmt"
 	"io"
 	"os"
@@ -758,12 +759,16 @@ func New(
 	)
 	app.sm.RegisterStoreDecoders()
 
-	// ===================== UPGRADE: v2 =====================
+	// ===================== UPGRADE =====================
 
 	upgradeInfo, err := app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
 	if err != nil {
 		panic(fmt.Sprintf("failed to read upgrade info: %v", err))
 	}
+
+	// =====================
+	// v2
+	// =====================
 
 	if upgradeInfo.Name == v2.UpgradeName &&
 		!app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
@@ -786,6 +791,34 @@ func New(
 	app.UpgradeKeeper.SetUpgradeHandler(
 		v2.UpgradeName,
 		v2.CreateUpgradeHandler(app.mm, app.configurator),
+	)
+
+	// =====================
+	// v3
+	// =====================
+
+	if upgradeInfo.Name == v3.UpgradeName &&
+		!app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+
+		storeUpgrades := storetypes.StoreUpgrades{
+			Added: []string{},
+		}
+
+		app.SetStoreLoader(
+			upgradetypes.UpgradeStoreLoader(
+				upgradeInfo.Height,
+				&storeUpgrades,
+			),
+		)
+	}
+
+	app.UpgradeKeeper.SetUpgradeHandler(
+		v3.UpgradeName,
+		v3.CreateUpgradeHandler(
+			app.mm,
+			app.configurator,
+			app.TokenFactoryKeeper,
+		),
 	)
 
 	// ===================== END UPGRADE =====================

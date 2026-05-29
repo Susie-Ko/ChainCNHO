@@ -40,15 +40,15 @@ jobs:
             export GOOS=linux
             export GOARCH=amd64
 
-            go build -o cnhod-linux-amd64 ./cmd/cnhod
+            go build -o cnho_stables_linux_x86_64 ./cmd/cnhod
             '
 
       - name: Upload Linux Binary
         uses: actions/upload-artifact@v4
         with:
-          name: cnhod-linux-amd64
+          name: cnho_stables_linux_x86_64
           path: |
-            cnhod-linux-amd64
+            cnho_stables_linux_x86_64
             libwasmvm.x86_64.so
 
   # =========================
@@ -75,14 +75,14 @@ jobs:
           export CC="clang -target x86_64-apple-macos10.15"
           export CXX="clang++ -target x86_64-apple-macos10.15"
 
-          go build -o cnhod-darwin-amd64 ./cmd/cnhod
+          go build -o cnho_stables_mac_intel_64 ./cmd/cnhod
 
       - name: Upload macOS Intel Binary
         uses: actions/upload-artifact@v4
         with:
-          name: cnhod-darwin-amd64
+          name: cnho_stables_mac_intel_64
           path: |
-            cnhod-darwin-amd64
+            cnho_stables_mac_intel_64
             libwasmvm.dylib
 
   # =========================
@@ -109,14 +109,14 @@ jobs:
           export CC="clang -target arm64-apple-macos11"
           export CXX="clang++ -target arm64-apple-macos11"
 
-          go build -o cnhod-darwin-arm64 ./cmd/cnhod
+          go build -o cnho_stables_mac_arm_64 ./cmd/cnhod
 
       - name: Upload macOS ARM64 Binary
         uses: actions/upload-artifact@v4
         with:
-          name: cnhod-darwin-arm64
+          name: cnho_stables_mac_arm_64
           path: |
-            cnhod-darwin-arm64
+            cnho_stables_mac_arm_64
             libwasmvm.dylib
 
   # =========================
@@ -174,12 +174,12 @@ jobs:
 
           export CGO_LDFLAGS="-L$(pwd)"
 
-          go build -o cnhod-windows-amd64.exe ./cmd/cnhod
+          go build -o cnho_stables_win_x86_64.exe ./cmd/cnhod
 
       - name: Upload Windows Binary
         uses: actions/upload-artifact@v4
         with:
-          name: cnhod-windows-amd64
+          name: cnho_stables_win_x86_64
           path: |
-            cnhod-windows-amd64.exe
+            cnho_stables_win_x86_64.exe
             wasmvm.dll
