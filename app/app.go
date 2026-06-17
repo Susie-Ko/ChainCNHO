@@ -1,6 +1,8 @@
 package app
 
 import (
+	v2 "cnho/app/upgrades/v2"
+	v3 "cnho/app/upgrades/v3"
 	"fmt"
 	"io"
 	"os"
@@ -123,7 +125,6 @@ import (
 const (
 	AccountAddressPrefix = "cnho"
 	Name                 = "cnho"
-	UpgradeName          = "v2"
 )
 
 // this line is used by starport scaffolding # stargate/wasm/app/enabledProposals
@@ -758,14 +759,20 @@ func New(
 	)
 	app.sm.RegisterStoreDecoders()
 
-	// ===================== UPGRADE: v2 =====================
+	// ===================== UPGRADE =====================
 
 	upgradeInfo, err := app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
 	if err != nil {
 		panic(fmt.Sprintf("failed to read upgrade info: %v", err))
 	}
 
-	if upgradeInfo.Name == UpgradeName && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+	// =====================
+	// v2
+	// =====================
+
+	if upgradeInfo.Name == v2.UpgradeName &&
+		!app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+
 		storeUpgrades := storetypes.StoreUpgrades{
 			Added: []string{
 				wasmtypes.StoreKey,
@@ -774,35 +781,45 @@ func New(
 		}
 
 		app.SetStoreLoader(
-			upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades),
+			upgradetypes.UpgradeStoreLoader(
+				upgradeInfo.Height,
+				&storeUpgrades,
+			),
 		)
 	}
 
-	// Upgrade Handler
-	app.UpgradeKeeper.SetUpgradeHandler(UpgradeName, func(
-		ctx sdk.Context,
-		plan upgradetypes.Plan,
-		vm module.VersionMap,
-	) (module.VersionMap, error) {
+	app.UpgradeKeeper.SetUpgradeHandler(
+		v2.UpgradeName,
+		v2.CreateUpgradeHandler(app.mm, app.configurator),
+	)
 
-		ctx.Logger().Info("🚀 RUNNING UPGRADE " + UpgradeName)
+	// =====================
+	// v3
+	// =====================
 
-		// 1️⃣ 跑 migrations（核心）
-		newVM, err := app.mm.RunMigrations(ctx, app.configurator, vm)
-		if err != nil {
-			return vm, err
+	if upgradeInfo.Name == v3.UpgradeName &&
+		!app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+
+		storeUpgrades := storetypes.StoreUpgrades{
+			Added: []string{},
 		}
 
-		// 2️⃣ TokenFactory params（建议保留）
-		app.TokenFactoryKeeper.SetParams(ctx, tokenfactorytypes.DefaultParams())
+		app.SetStoreLoader(
+			upgradetypes.UpgradeStoreLoader(
+				upgradeInfo.Height,
+				&storeUpgrades,
+			),
+		)
+	}
 
-		// 3️⃣ Wasm params（建议保留）
-		app.WasmKeeper.SetParams(ctx, wasmtypes.DefaultParams())
-
-		ctx.Logger().Info("✅ UPGRADE " + UpgradeName + " SUCCESS")
-
-		return newVM, nil
-	})
+	app.UpgradeKeeper.SetUpgradeHandler(
+		v3.UpgradeName,
+		v3.CreateUpgradeHandler(
+			app.mm,
+			app.configurator,
+			app.TokenFactoryKeeper,
+		),
+	)
 
 	// ===================== END UPGRADE =====================
 

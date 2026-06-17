@@ -1,0 +1,185 @@
+name: Build Multi Platform (Production)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+
+  # =========================
+  # Linux (CentOS7 Compatible)
+  # =========================
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CentOS7 Compatible Binary
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            centos:7 \
+            bash -c '
+
+            sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/CentOS-*.repo
+            sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/CentOS-*.repo
+            sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/CentOS-*.repo
+
+            yum install -y wget git gcc gcc-c++ make tar gzip
+
+            wget https://go.dev/dl/go1.21.9.linux-amd64.tar.gz
+
+            tar -C /usr/local -xzf go1.21.9.linux-amd64.tar.gz
+
+            export PATH=/usr/local/go/bin:$PATH
+
+            export CGO_ENABLED=1
+            export GOOS=linux
+            export GOARCH=amd64
+
+            go build -o cnho_stables_linux_x86_64 ./cmd/cnhod
+            '
+
+      - name: Upload Linux Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnho_stables_linux_x86_64
+          path: |
+            cnho_stables_linux_x86_64
+            libwasmvm.x86_64.so
+
+  # =========================
+  # macOS Intel (10.15)
+  # =========================
+  build-macos-amd64:
+    runs-on: macos-13
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.9'
+
+      - name: Build macOS Intel
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=amd64
+
+          export MACOSX_DEPLOYMENT_TARGET=10.15
+
+          export CC="clang -target x86_64-apple-macos10.15"
+          export CXX="clang++ -target x86_64-apple-macos10.15"
+
+          go build -o cnho_stables_mac_intel_64 ./cmd/cnhod
+
+      - name: Upload macOS Intel Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnho_stables_mac_intel_64
+          path: |
+            cnho_stables_mac_intel_64
+            libwasmvm.dylib
+
+  # =========================
+  # macOS Apple Silicon
+  # =========================
+  build-macos-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.9'
+
+      - name: Build macOS ARM64
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=arm64
+
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+
+          export CC="clang -target arm64-apple-macos11"
+          export CXX="clang++ -target arm64-apple-macos11"
+
+          go build -o cnho_stables_mac_arm_64 ./cmd/cnhod
+
+      - name: Upload macOS ARM64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnho_stables_mac_arm_64
+          path: |
+            cnho_stables_mac_arm_64
+            libwasmvm.dylib
+
+  # =========================
+  # Windows
+  # =========================
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.9'
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-tools-git
+
+      - name: Verify wasmvm.dll
+        shell: msys2 {0}
+        run: |
+          ls
+
+      - name: Generate libwasmvm.a
+        shell: msys2 {0}
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+
+          gendef wasmvm.dll
+
+          dlltool \
+            --dllname wasmvm.dll \
+            --def wasmvm.def \
+            --output-lib libwasmvm.a
+
+          ls
+
+      - name: Build Windows
+        shell: msys2 {0}
+        run: |
+          export PATH="/c/hostedtoolcache/windows/go/1.21.9/x64/bin:$PATH"
+
+          go version
+
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+
+          export CGO_LDFLAGS="-L$(pwd)"
+
+          go build -o cnho_stables_win_x86_64.exe ./cmd/cnhod
+
+      - name: Upload Windows Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnho_stables_win_x86_64
+          path: |
+            cnho_stables_win_x86_64.exe
+            wasmvm.dll
